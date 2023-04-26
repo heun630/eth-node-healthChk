@@ -4,50 +4,66 @@ const ethers = require('ethers');
 const http = require('http');
 require('dotenv').config();
 
-const host = process.env.ETH_RPC_HOST || 'localhost';
-const rpc_port = process.env.ETH_RPC_PORT || 8545;
-const network = process.env.ETH_NETWORK || 'homestead';
-const local_port = process.env.ETH_MONITOR_PORT || 50000;
-const max_difference = process.env.MAX_BLOCK_DIFFERENCE || 3;
-const server_name = process.env.SERVER_NAME || 'test-geth';
-const server_ip = process.env.SERVER_IP || '127.0.0.1';
-
-const provider = ethers.getDefaultProvider(network);
-const localProvider = new ethers.providers.JsonRpcProvider(`http://${host}:${rpc_port}`);
-
-localProvider.connection.timeout = 5000;
-
-const onHealthcheckRequest = async (req, res) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-
-    console.log(`>> checking ${host}:${rpc_port} (${network})`);
-    let hostUrl = `${host}:${rpc_port}`;
-
-    let localBlockNum;
-    let networkBlockNum;
-
-    try {
-        localBlockNum = await localProvider.getBlockNumber();
-        networkBlockNum = await provider.getBlockNumber();
-    } catch (e) {
-        console.error(e);
-        res.writeHead(500, {'Content-Type': 'application/json'})
-        res.end();
-    }
-
-    let responseStatus = networkBlockNum - localBlockNum > max_difference ? 500 : 200;
-
-    if (localBlockNum > 10000 && networkBlockNum <= 0) {
-        responseStatus = 200;
-    }
-
-    res.writeHead(responseStatus, {'Content-Type': 'application/json'});
-
-    let difference = (localBlockNum - networkBlockNum).toString();
-    res.end(`{"difference":"${difference}", "serverIpString":"${server_ip}", "netWork":"${network}", "responseStatus":"${responseStatus}", "server_name":"${server_name}" }`);
+const config = {
+    host: process.env.ETH_RPC_HOST || 'localhost',
+    rpc_port: process.env.ETH_RPC_PORT || 8545,
+    network: process.env.ETH_NETWORK || 'homestead',
+    local_port: process.env.ETH_MONITOR_PORT || 50000,
+    max_difference: process.env.MAX_BLOCK_DIFFERENCE || 3,
+    server_name: process.env.SERVER_NAME || 'test-geth',
+    server_ip: process.env.SERVER_IP || '127.0.0.1',
 };
 
-console.log(`Starting eth monitoring service for ${host}:${rpc_port} on ${local_port}...`);
-http.createServer(onHealthcheckRequest).listen(local_port);
+const provider = ethers.getDefaultProvider(config.network);
+const localProvider = new ethers.providers.JsonRpcProvider(`http://${config.host}:${config.rpc_port}`);
+localProvider.connection.timeout = 5000;
 
+function setCORSHeaders(res) {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+}
+
+async function getBlockNumbers() {
+    try {
+        const localBlockNum = await localProvider.getBlockNumber();
+        const networkBlockNum = await provider.getBlockNumber();
+        return { localBlockNum, networkBlockNum };
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+}
+
+function createHealthcheckResponse(localBlockNum, networkBlockNum, responseStatus) {
+    const difference = (localBlockNum - networkBlockNum).toString();
+    return JSON.stringify({
+        difference,
+        serverIpString: config.server_ip,
+        netWork: config.network,
+        responseStatus,
+        server_name: config.server_name,
+    });
+}
+
+const onHealthcheckRequest = async (req, res) => {
+    setCORSHeaders(res);
+
+    console.log(`>> checking ${config.host}:${config.rpc_port} (${config.network})`);
+
+    const { localBlockNum, networkBlockNum } = await getBlockNumbers();
+
+    if (!localBlockNum || !networkBlockNum) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end();
+        return;
+    }
+
+    const responseStatus = networkBlockNum - localBlockNum > config.max_difference ? 500 : 200;
+    res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
+
+    const healthcheckResponse = createHealthcheckResponse(localBlockNum, networkBlockNum, responseStatus);
+    res.end(healthcheckResponse);
+};
+
+console.log(`Starting eth monitoring service for ${config.host}:${config.rpc_port} on ${config.local_port}...`);
+http.createServer(onHealthcheckRequest).listen(config.local_port);
