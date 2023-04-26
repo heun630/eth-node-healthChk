@@ -1,0 +1,28 @@
+{
+  "name": "eth-node-lb-healthcheck",
+  "version": "1.1.6",
+  "description": "Simple http server to monitor if Geth/Parity is in sync with the blockchain; can be used with AWS ELB",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ExilionTechnologies/eth-node-lb-healthcheck.git"
+  },
+  "author": "exiliontech",
+  "bin": {
+    "eth-node-lb-healthcheck": "./index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^8.0.0",
+    "ethers": "^4.0.33",
+    "http": "0.0.0"
+  },
+  "bugs": {
+    "url": "https://github.com/ExilionTechnologies/eth-node-lb-healthcheck/issues"
+  },
+  "homepage": "https://github.com/ExilionTechnologies/eth-node-lb-healthcheck#readme",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {}
+}
